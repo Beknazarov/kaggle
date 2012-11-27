@@ -10,9 +10,16 @@
   (slurp source))
 
 (defn split-csv-line [line]
-  (map (fn [x]
-         (if (or (= x ",") (= x ",,")) nil x))
-       (re-seq #"\".*\"|[^,]+|,,|,$|^," line)))
+  (lazy-seq
+   (let [matcher (re-matcher #"^((\".*\")|[^,]*)(,(.*))?$" line)
+         find-result (re-find matcher)]
+     (when find-result
+       (let [groups (re-groups matcher)
+             next-item (groups 1)
+             remaining (groups 4)]
+         (if remaining
+           (cons next-item (split-csv-line-rec remaining))
+           (list next-item)))))))
 
 (defn csv-line-seq->data-items
   ([xs header]
