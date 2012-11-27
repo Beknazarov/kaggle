@@ -31,6 +31,25 @@
      (let [~line-seq-name (line-seq rdr#)]
        ~@body)))
 
+(defmacro with-csv-readers [csv-reader-bindings & body]
+  (let [binding-forms
+        (map
+         (fn [[csv-name source & {:keys [header]}]]
+           (let [rdr-sym (gensym "rdr")
+                 line-seq-sym (gensym "line-seq")]
+             `([~rdr-sym (clojure.java.io/reader ~source)]
+                 [~csv-name
+                  (-> (line-seq ~rdr-sym)
+                      ~(if header
+                         `(csv-line-seq->data-items ~header)
+                         `csv-line-seq->data-items))])))
+         csv-reader-bindings)
+        reader-binding-forms (map first binding-forms)
+        line-seq-binding-forms (map second binding-forms)]
+    `(with-open [~@(apply concat reader-binding-forms)]
+       (let [~@(apply concat line-seq-binding-forms)]
+         ~@body))))
+
 (defmacro with-csv [csv-args & body]
   (let [[csv-name source header] csv-args]
     `(with-reader-as-line-seq [line-seq# ~source]
