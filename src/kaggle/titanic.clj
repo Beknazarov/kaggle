@@ -1,6 +1,7 @@
 (ns kaggle.titanic
   (:use [kaggle.core]
-        [clojure.tools.macro]))
+        [clojure.tools.macro])
+  (:require [clojure.string]))
 
 (def train-csv "train.csv")
 (def test-csv "test.csv")
@@ -31,33 +32,28 @@
      (let [~line-seq-name (line-seq rdr#)]
        ~@body)))
 
-(defmacro with-csv-readers [csv-reader-bindings & body]
-  (let [binding-forms
-        (map
-         (fn [[csv-name source & {:keys [header]}]]
-           (let [rdr-sym (gensym "rdr")
-                 line-seq-sym (gensym "line-seq")]
-             `([~rdr-sym (clojure.java.io/reader ~source)]
-                 [~csv-name
-                  (-> (line-seq ~rdr-sym)
-                      ~(if header
-                         `(csv-line-seq->data-items ~header)
-                         `csv-line-seq->data-items))])))
-         csv-reader-bindings)
-        reader-binding-forms (map first binding-forms)
-        line-seq-binding-forms (map second binding-forms)]
-    `(with-open [~@(apply concat reader-binding-forms)]
-       (let [~@(apply concat line-seq-binding-forms)]
-         ~@body))))
+(defmacro with-csv-reader [[csv-name source header] & body]
+  `(with-reader-as-line-seq [line-seq# ~source]
+     (let [~csv-name
+           (-> line-seq#
+               ~(if header
+                  `(csv-line-seq->data-items ~header)
+                  `(csv-line-seq->data-items)))]
+       ~@body)))
 
-(defmacro with-csv [csv-args & body]
-  (let [[csv-name source header] csv-args]
-    `(with-reader-as-line-seq [line-seq# ~source]
-       (let [~csv-name 
-             (if ~header
-               (csv-line-seq->data-items line-seq# ~header)
-               (csv-line-seq->data-items line-seq#))]
-         ~@body))))
+(defmacro with-csv-writer [[writer-fn dest header] & body]
+  (assert (not (nil? header)))
+  `(with-open [wrtr# (clojure.java.io/writer ~dest)]
+     (.write wrtr# (clojure.string/join "," (map name ~header)))
+     (.newLine wrtr#)
+     (let [~writer-fn
+           (fn [x#]
+             (->> ~header
+                  (map #(x# %1))
+                  (clojure.string/join ",")
+                  (.write wrtr#))
+             (.newLine wrtr#))]
+       ~@body)))
 
 (defn header->idx-lookup-table [header]
   (zipmap header (range)))
@@ -75,8 +71,3 @@
                (let [value# (do ~@body)]
                  [~group-name value#])))
         (into {})))
-
-(with-csv [data "train.csv"]
-  (aggregate [_ group-data] (group-by :sex data)
-    (normalize
-     (frequencies (map :survived group-data)))))
