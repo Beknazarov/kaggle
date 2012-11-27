@@ -56,7 +56,7 @@
                    `(csv-line-seq->data-items)))]
          ~@body))))
 
-(defmacro with-csv-writer [[writer-fn dest header] & body]
+(defmacro with-csv-writer [[dest writer-fn header] & body]
   (assert (not (nil? header)))
   `(with-open [wrtr# (clojure.java.io/writer ~dest)]
      (.write wrtr# (clojure.string/join "," (map name ~header)))
@@ -86,3 +86,22 @@
                (let [value# (do ~@body)]
                  [~group-name value#])))
         (into {})))
+
+
+;; (with-csv-reader [data "train.csv"]
+;;   (aggregate [_ group-data] (group-by :sex data)
+;;     (normalize
+;;      (frequencies (map :survived group-data)))))
+
+(defn gender-based-model []
+  (with-csv-reader [data "test.csv" header]
+    (with-csv-writer
+      ["genderbasedmodel.csv" 
+       write-prediction (into [:survived] header)]
+      (dorun
+       (map
+        (fn [x]
+          (let [survived (if (= (x :sex) "female") 1 0)
+                prediction (assoc x :survived survived)]
+            (write-prediction prediction)))
+        data)))))
