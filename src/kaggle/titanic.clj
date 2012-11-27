@@ -32,7 +32,8 @@
           xs))
   ([xs]
      (let [header (map keyword (split-csv-line (first xs)))]
-       (csv-line-seq->data-items (rest xs) header))))
+       [(csv-line-seq->data-items (rest xs) header)
+        header])))
 
 (defmacro with-reader-as-line-seq [[line-seq-name source] & body]
   `(with-open [rdr# (clojure.java.io/reader ~source)]
@@ -40,13 +41,20 @@
        ~@body)))
 
 (defmacro with-csv-reader [[csv-name source header] & body]
-  `(with-reader-as-line-seq [line-seq# ~source]
-     (let [~csv-name
-           (-> line-seq#
-               ~(if header
-                  `(csv-line-seq->data-items ~header)
-                  `(csv-line-seq->data-items)))]
-       ~@body)))
+  (assert (or (symbol? header)
+              (vector? header)
+              (nil? header)))
+  (let [capture-header (symbol? header)
+        header-provided (vector? header)]
+    `(with-reader-as-line-seq [line-seq# ~source]
+       (let [~(if header-provided
+                csv-name
+                [csv-name (if capture-header header `header#)])
+             (-> line-seq#
+                 ~(if header-provided
+                   `(csv-line-seq->data-items ~header)
+                   `(csv-line-seq->data-items)))]
+         ~@body))))
 
 (defmacro with-csv-writer [[writer-fn dest header] & body]
   (assert (not (nil? header)))
