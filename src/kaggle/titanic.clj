@@ -70,9 +70,6 @@
              (.newLine wrtr#))]
        ~@body)))
 
-(defn header->idx-lookup-table [header]
-  (zipmap header (range)))
-
 ;; Aggregation
 (defn normalize [dist]
   (let [z (apply + (vals dist))]
@@ -96,7 +93,7 @@
 (defn gender-based-model []
   (with-csv-reader [data "test.csv" header]
     (with-csv-writer
-      ["genderbasedmodel.csv" 
+      ["genderbasedmodel.csv"
        write-prediction (into [:survived] header)]
       (dorun
        (map
